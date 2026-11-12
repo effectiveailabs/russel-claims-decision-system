@@ -1,0 +1,75 @@
+spec {
+    rsl: "0.4.1",
+    carrier: "Example Mutual",
+    state: CA,
+    product: "House settlement on a total loss",
+    version: "0.1.0",
+    effective_date: 2026-01-01
+}
+
+Sources = {
+    form: Source = {
+        artifact: artifact("00000000-0000-4000-8000-0000000000a1"),
+        kind: pdf
+    },
+    guide: Source = {
+        artifact: artifact("00000000-0000-4000-8000-0000000000a2"),
+        kind: pdf
+    }
+}
+
+Constants = {
+    erc_multiple [cite: form:p3] = 2,
+    debris_share [cite: form:p9] = 0.30,
+    contents_share [cite: guide:p16] = 0.60,
+    contents_cap [cite: guide:p16] = 350000,
+    advance_months [cite: guide:p11] = 4,
+    switch_day [cite: form:p3] = 180
+}
+
+Records = {
+    Claim = {
+        inputs {
+            house_limit: Num {precision: int} where self in [0, 100000000] [cite: form:p3],
+            ops_limit: Num {precision: int} where self in [0, 100000000] [cite: form:p3],
+            deductible: Num {precision: int} where self in [0, 1000000] [cite: form:p3],
+            contents_limit: Num {precision: int} where self in [0, 100000000] [cite: guide:p16],
+            monthly_living: Num {precision: int} where self in [0, 1000000] [cite: guide:p11],
+            rebuild_cost: Num {precision: int} where self in [0, 1000000000] [cite: form:p3],
+            debris_cost: Num {precision: int} where self in [0, 100000000] [cite: form:p9],
+            code_cost: Num {precision: int} where self in [0, 100000000] [cite: form:p9],
+            loss_date: Date where self in [2020-01-01, 2035-12-31] [cite: form:p3],
+            as_of: Date where self in [2020-01-01, 2040-12-31] [cite: form:p3],
+            rebuild_started: Bool [cite: form:p3]
+        },
+        step dayone [cite: guide:p16] {
+            contents: Premium [cite: guide:p16] = round(min(self.contents_limit * contents_share, contents_cap), 0, half_up),
+            living: Premium [cite: guide:p11] = round(self.monthly_living * advance_months, 0, half_up)
+        },
+        step pay [cite: form:p3] {
+            days_since_loss: Num = diff_days(self.as_of, self.loss_date),
+            verified_basis: Bool = self.days_since_loss >= switch_day and not self.rebuild_started,
+            combined: Num = self.house_limit + self.ops_limit,
+            erc_covered: Num = min(self.rebuild_cost, self.combined * erc_multiple),
+            limit_covered: Num = min(self.rebuild_cost, self.combined),
+            cap_covered: Num = if self.verified_basis then self.limit_covered else self.erc_covered,
+            house: Premium [cite: form:p3] = round(max(self.cap_covered - self.deductible, 0), 0, half_up),
+            at_stake: Premium [cite: form:p3] = round(self.erc_covered - self.limit_covered, 0, half_up),
+            house_raised: Num = max(min(self.rebuild_cost, self.house_limit * erc_multiple), self.house_limit),
+            debris_base: Num = if self.verified_basis then self.house_limit else self.house_raised,
+            debris: Premium [cite: form:p9] = round(min(self.debris_cost, self.debris_base * debris_share), 0, half_up),
+            code: Premium [cite: form:p9] = round(min(self.code_cost, self.house_limit), 0, half_up),
+            position: Premium [cite: form:p3] = self.house + self.debris + self.code
+        }
+    }
+}
+
+RatingOutcomes = {
+    contents: Claim.contents,
+    living: Claim.living,
+    house: Claim.house,
+    debris: Claim.debris,
+    code: Claim.code,
+    at_stake: Claim.at_stake,
+    position: Claim.position
+}

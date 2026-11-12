@@ -1,0 +1,59 @@
+spec {
+    rsl: "0.4.1",
+    carrier: "Example Mutual",
+    state: CA,
+    product: "Wildfire total loss claims guideline",
+    version: "0.1.0",
+    effective_date: 2026-01-01
+}
+
+use st = "settlement.rsl"
+
+Roles = { intake < adjuster < supervisor }
+
+Acts = { quote: @Role.adjuster, bind: @Role.adjuster }
+
+Sources = {
+    guide: Source = {
+        artifact: artifact("00000000-0000-4000-8000-0000000000a2"),
+        kind: pdf
+    }
+}
+
+Constants = {
+    alert_day [cite: guide:p18] = 150
+}
+
+Records = {
+    File = {
+        inputs {
+            reported: Date where self in [2020-01-01, 2035-12-31] [cite: guide:p13],
+            notice_sent: Bool by @Role.adjuster [cite: guide:p13],
+            claim: st.Claim,
+            claim.rebuild_cost by @Role.adjuster,
+            claim.debris_cost by @Role.adjuster,
+            claim.code_cost by @Role.adjuster
+        },
+        step position [cite: guide:p13] {
+            days_since_loss: Num = diff_days(self.claim.as_of, self.claim.loss_date),
+            position: Premium = st(self.claim).position,
+            contents: Premium = st(self.claim).contents,
+            living: Premium = st(self.claim).living,
+            at_stake: Premium = st(self.claim).at_stake,
+            days_open: Num = diff_days(self.claim.as_of, self.reported),
+            ack_days_left: Num [cite: guide:p13] = round(15 - self.days_open, 0, half_up),
+            decide_days_left: Num [cite: guide:p13] = round(40 - self.days_open, 0, half_up)
+        }
+    } where self.notice_sent or self.days_since_loss < alert_day [code: "TIME_LIMIT_NOT_DISCLOSED", message: "Send the written time-limit notice before taking a position after day 150.", cite: guide:p18]
+        refer rebuild_clock when self.days_since_loss >= alert_day and not self.claim.rebuild_started
+            to @Role.supervisor because "Day 150, no rebuild started: the 180-day clause is 30 days away." [cite: guide:p18]
+}
+
+RatingOutcomes = {
+    position: File.position,
+    contents: File.contents,
+    living: File.living,
+    at_stake: File.at_stake,
+    ack_days_left: File.ack_days_left,
+    decide_days_left: File.decide_days_left
+}

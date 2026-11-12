@@ -1,0 +1,44 @@
+# The Ortiz total loss: day 2 owed now, day 40 position, day 150 notice and supervisor sign-off.
+program "claim.rsl"
+as intake:sam
+open
+answer reported = 2026-10-16
+answer claim.loss_date = 2026-10-14
+answer claim.as_of = 2026-10-16
+answer claim.house_limit = 2500000
+answer claim.ops_limit = 250000
+answer claim.deductible = 10000
+answer claim.contents_limit = 1250000
+answer claim.monthly_living = 14000
+answer claim.rebuild_started = false
+# Day 2: what the family is owed now is known before any estimate is in.
+expect outcome contents = 350000
+expect outcome living = 56000
+expect outcome ack_days_left = 15
+refused NOT_AUTHORIZED: answer claim.rebuild_cost = 3400000
+as adjuster:lee
+answer claim.rebuild_cost = 3400000 because "Contractor estimate"
+answer claim.debris_cost = 280000
+answer claim.code_cost = 410000
+answer notice_sent = false
+# Day 40: the cited position.
+answer claim.as_of = 2026-11-23
+expect outcome position = 4080000
+expect outcome at_stake = 650000
+expect stage Quotable
+quote day40
+# Day 150: the rule stops a position until the time-limit notice is sent, then refers to the supervisor.
+answer claim.as_of = 2027-03-13
+expect quote day40 lapsed
+expect stage Ineligible
+refused NOT_QUOTABLE: quote day150
+answer notice_sent = true because "Time-limit notice mailed, 10 CCR 2695.4(a)"
+expect referral rebuild_clock Open
+refused NOT_QUOTABLE: quote day150
+refused NOT_AUTHORIZED: answer rebuild_clock = Approved
+as supervisor:dana
+answer rebuild_clock = Approved because "Permit queue is good cause; extension granted in writing"
+as adjuster:lee
+expect stage Quotable
+quote day150
+expect outcome position = 4080000
